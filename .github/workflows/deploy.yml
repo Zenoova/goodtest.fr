@@ -62,9 +62,11 @@ jobs:
 
       - name: Get runner IP
         id: ip
+        if: ${{ env.ACT != 'true' && github.actor != 'nektos/act' }}
         uses: haythem/public-ip@v1.3
 
       - name: Whitelist IP
+        if: ${{ env.ACT != 'true' && github.actor != 'nektos/act' }}
         run: |
           curl -H'Authorization: cpanel ${{ secrets.CPANEL_USERNAME }}:${{ secrets.CPANEL_API_TOKEN }}' \
           'https://${{ secrets.CPANEL_SERVER }}:2083/execute/SshWhitelist/remove_all'
@@ -73,6 +75,7 @@ jobs:
           'https://${{ secrets.CPANEL_SERVER }}:2083/execute/SshWhitelist/add?address=${{ steps.ip.outputs.ipv4 }}&port=22'
 
       - name: Deploy via rsync
+        if: ${{ env.ACT != 'true' && github.actor != 'nektos/act' }}
         run: |
           eval $(ssh-agent -s)
           mkdir -p ~/.ssh
@@ -88,6 +91,7 @@ jobs:
             ${{ secrets.CPANEL_USERNAME }}@${{ secrets.CPANEL_SERVER }}:/home2/${{ secrets.CPANEL_USERNAME }}/repositories/${{ github.event.repository.name }}
 
       - name: Post-deploy setup on server
+        if: ${{ env.ACT != 'true' && github.actor != 'nektos/act' }}
         run: |
           ssh -i ~/.ssh/deploy -o StrictHostKeyChecking=no \
             ${{ secrets.CPANEL_USERNAME }}@${{ secrets.CPANEL_SERVER }} \
@@ -100,6 +104,7 @@ jobs:
   subdomains:
     name: Subdomains
     runs-on: ubuntu-latest
+    if: ${{ env.ACT != 'true' && github.actor != 'nektos/act' }}
     needs:
       - deploy
       - determine_subdomain
