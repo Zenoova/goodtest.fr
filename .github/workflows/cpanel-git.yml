@@ -35,11 +35,7 @@ jobs:
           GIT_REPO_PATH="/home2/sc1utou1720/repositories/${REPO_NAME}"
           
           SRC_JSON=$(jq -cn --arg url "git@github.com:Zenoova/${REPO_NAME}.git" --arg remote_name "origin" '{remote_name:$remote_name, url:$url}')
-          SRC_PARAM=$(python - <<'PY'
-import os, urllib.parse
-print(urllib.parse.quote(os.environ["SRC_JSON"], safe=''))
-PY
-)
+          SRC_PARAM=$(python -c "import os, urllib.parse; print(urllib.parse.quote(os.environ['SRC_JSON'], safe=''))")
           
           RESPONSE_FILE=$(mktemp)
           STATUS=$(
