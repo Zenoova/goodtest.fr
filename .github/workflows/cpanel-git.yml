@@ -34,8 +34,13 @@ jobs:
           REPO_NAME="${{ github.event.repository.name }}"
           GIT_REPO_PATH="/home2/sc1utou1720/repositories/${REPO_NAME}"
           
-          SRC_JSON=$(jq -cn --arg url "git@github.com:Zenoova/${REPO_NAME}.git" --arg remote_name "origin" '{remote_name:$remote_name, url:$url}')
-          SRC_PARAM=$(python -c "import os, urllib.parse; print(urllib.parse.quote(os.environ['SRC_JSON'], safe=''))")
+          SRC_PARAM=$(REPO_NAME="$REPO_NAME" python - <<'PY'
+import os, urllib.parse, json
+repo = os.environ["REPO_NAME"]
+src = json.dumps({"remote_name": "origin", "url": f"git@github.com:Zenoova/{repo}.git"})
+print(urllib.parse.quote(src, safe=''))
+PY
+)
           
           RESPONSE_FILE=$(mktemp)
           STATUS=$(
