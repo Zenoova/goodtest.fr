@@ -1,0 +1,54 @@
+name: cPanel Subdomain Setup
+
+on:
+  workflow_call:
+    inputs:
+      subdomain:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      subdomain:
+        description: Subdomain to create
+        required: true
+        type: string
+
+jobs:
+  cp_setup:
+    name: cPanel Subdomain Setup
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup sub-domain
+        run: |
+          set -euo pipefail
+
+          ROOT_DOMAIN="zenoova.com"
+          DOC_ROOT="repositories/${{ github.event.repository.name }}"
+
+          RESPONSE_FILE=$(mktemp)
+          STATUS=$(
+            curl -sS \
+              -o "$RESPONSE_FILE" \
+              -w "%{http_code}" \
+              -H "Authorization: cpanel ${{ secrets.CPANEL_USERNAME }}:${{ secrets.CPANEL_API_TOKEN }}" \
+              "https://${{ secrets.CPANEL_SERVER }}:2083/execute/SubDomain/addsubdomain?domain=${{ inputs.subdomain }}&rootdomain=${ROOT_DOMAIN}&dir=${DOC_ROOT}"
+          )
+
+          echo "cPanel response (status $STATUS):"
+          cat "$RESPONSE_FILE"
+
+          if jq -e '.status == 1' "$RESPONSE_FILE" >/dev/null; then
+            exit 0
+          fi
+
+          if jq -e '.errors[]? | contains("already exists") or contains("DNS existe")' "$RESPONSE_FILE" >/dev/null; then
+            echo "Subdomain already exists; continuing."
+            exit 0
+          fi
+
+          echo "cPanel API error; stopping workflow."
+          exit 1

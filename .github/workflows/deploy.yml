@@ -1,0 +1,107 @@
+name: Build & Deploy Next.js
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    outputs:
+      subdomain: ${{ steps.subdomain.outputs.subdomain }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute subdomain
+        id: subdomain
+        run: |
+          REPO="${{ github.event.repository.name }}"
+          SUBDOMAIN="${REPO%%.*}"
+          echo "subdomain=$SUBDOMAIN" >> $GITHUB_OUTPUT
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+        run: npm run build
+
+      - name: Compile TypeScript for server
+        run: npm run tsc
+
+      - name: Prune dev deps
+        run: npm prune --omit=dev
+
+      - name: Get runner IP
+        id: ip
+        uses: haythem/public-ip@v1.3
+
+      - name: Whitelist IP
+        run: |
+          curl -H'Authorization: cpanel ${{ secrets.CPANEL_USERNAME }}:${{ secrets.CPANEL_API_TOKEN }}' \
+          'https://${{ secrets.CPANEL_SERVER }}:2083/execute/SshWhitelist/remove_all'
+
+          curl -H'Authorization: cpanel ${{ secrets.CPANEL_USERNAME }}:${{ secrets.CPANEL_API_TOKEN }}' \
+          'https://${{ secrets.CPANEL_SERVER }}:2083/execute/SshWhitelist/add?address=${{ steps.ip.outputs.ipv4 }}&port=22'
+
+      - name: Deploy via rsync
+        run: |
+          eval $(ssh-agent -s)
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy
+          chmod 400 ~/.ssh/deploy
+
+          rsync -av --delete \
+            --exclude=".next/cache" \
+            --exclude=".htaccess" \
+            -e "ssh -i ~/.ssh/deploy -o StrictHostKeyChecking=no" \
+            . \
+            ${{ secrets.CPANEL_USERNAME }}@${{ secrets.CPANEL_SERVER }}:/home2/${{ secrets.CPANEL_USERNAME }}/repositories/${{ github.event.repository.name }}
+
+      - name: Post-deploy setup on server
+        run: |
+          ssh -i ~/.ssh/deploy -o StrictHostKeyChecking=no \
+            ${{ secrets.CPANEL_USERNAME }}@${{ secrets.CPANEL_SERVER }} \
+            "cd /home2/${{ secrets.CPANEL_USERNAME }}/repositories/${{ github.event.repository.name }} && npm run tsc"
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf ~/.ssh
+
+  cloudflare_subdomain:
+    name: Cloudflare Subdomain
+    needs: deploy
+    uses: ./.github/workflows/cloudflare-subdomain.yml
+    with:
+      subdomain: ${{ needs.deploy.outputs.subdomain }}
+    secrets: inherit
+
+  cpanel_subdomain:
+    name: cPanel Subdomain
+    needs: deploy
+    uses: ./.github/workflows/cpanel-subdomain.yml
+    with:
+      subdomain: ${{ needs.deploy.outputs.subdomain }}
+    secrets: inherit
+
+  cpanel_git:
+    name: cPanel Git Repo
+    needs: deploy
+    uses: ./.github/workflows/cpanel-git.yml
+    with:
+      subdomain: ${{ needs.deploy.outputs.subdomain }}
+    secrets: inherit

@@ -1,0 +1,54 @@
+name: cPanel Git Repo Setup
+
+on:
+  workflow_call:
+    inputs:
+      subdomain:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      subdomain:
+        description: Subdomain to create
+        required: true
+        type: string
+
+jobs:
+  cp_setup:
+    name: cPanel Git Repo Setup
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Git Repository
+        run: |
+          set -euo pipefail
+          
+          REPO_NAME="${{ github.event.repository.name }}"
+          GIT_REPO_PATH="/home2/sc1utou1720/repositories/${REPO_NAME}"
+          
+          RESPONSE_FILE=$(mktemp)
+          STATUS=$(
+          curl -sS \
+              -o "$RESPONSE_FILE" \
+              -w "%{http_code}" \
+              -H "Authorization: cpanel ${{ secrets.CPANEL_USERNAME }}:${{ secrets.CPANEL_API_TOKEN }}" \
+              "https://${{ secrets.CPANEL_SERVER }}:2083/execute/VersionControl/create?type=git&name=${REPO_NAME}&repository_root=${GIT_REPO_PATH}&source_repository={\"remote_name\":\"origin\",\"url\":\"git@github.com:Zenoova/${REPO_NAME}.git\"}"
+          )
+          
+          echo "cPanel response (status $STATUS):"
+          cat "$RESPONSE_FILE"
+          
+          if jq -e '.status == 1' "$RESPONSE_FILE" >/dev/null; then
+            exit 0
+          fi
+          
+          if jq -e '((.errors // []) | map(tostring) | any(test("already exists|existe d..j|already under version control"; "i"))) == true' "$RESPONSE_FILE" >/dev/null; then
+            echo "Git repository already exists; continuing."
+            exit 0
+          fi
+          
+          echo "cPanel API error; stopping workflow."
+          exit 1
