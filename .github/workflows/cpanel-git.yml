@@ -35,7 +35,7 @@ jobs:
               -o "$RESPONSE_FILE" \
               -w "%{http_code}" \
               -H "Authorization: cpanel ${{ secrets.CPANEL_USERNAME }}:${{ secrets.CPANEL_API_TOKEN }}" \
-              "https://${{ secrets.CPANEL_SERVER }}:2083/execute/VersionControl/create?type=git&name=${REPO_NAME}&repository_root=${GIT_REPO_PATH}&source_repository={\"remote_name\":\"origin\",\"url\":\"git@github.com:Zenoova/${REPO_NAME}.git\"}"
+              "https://${{ secrets.CPANEL_SERVER }}:2083/execute/VersionControl/create?type=git&name=${REPO_NAME}&repository_root=${GIT_REPO_PATH}&source_repository={"remote_name":"origin","url":"git@github.com:Zenoova/${REPO_NAME}.git"}"
           )
           
           echo "cPanel response (status $STATUS):"
